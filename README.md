@@ -6,6 +6,11 @@ The script checks for movement in the pixels (video frame is processed) and runs
 If some movement or faces are detected for a continuous amount of time (customizable & derived from number of frames) a notification is printed. Also includes notifications to be sent by email (with current video frame) and logging of all terminal output (both are customizable).
 If configured images of triggerd event are saved to disk.
 
+# Tests
+
+- on Windows: average frame rate of 10 fps (without email notifications)
+- on Raspberry Pi 4 (4GB): average frame rate of 5 fps (with email notifications)
+
 # Download
 
 Simply clone this git.The files included in git are:
@@ -13,6 +18,7 @@ Simply clone this git.The files included in git are:
 - haarcascade_frontalface_default.xml (essential)
 - user_config.json (essential)
 - requirements.txt (optional)
+- test.py (optional - examplatory script) 
 
 # Start
 
