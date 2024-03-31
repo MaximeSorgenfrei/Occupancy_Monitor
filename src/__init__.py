@@ -8,6 +8,7 @@ import time
 from src.email import EMailService
 from src.texttype import TextType
 from src.log import Log
+from src.fps import FPS
 
 class OccupancyMonitor():
 
@@ -55,6 +56,8 @@ class OccupancyMonitor():
             if self.USER_SETTING_ACTIVATE_LOG:
                 self.print_message(f"[{time.strftime(self.SETTING_TIME_FMT)}]\tArchive folder has been created. ({self.SETTING_ARCHIVE_FOLDER})")
 
+        self.fps = FPS()
+
         if show_user_settings: self.show_user_settings()
         if diagnostics: self.run_diagnostics()
 
@@ -93,7 +96,7 @@ class OccupancyMonitor():
 
     def print_message(self, message):
         if self.USER_SETTING_ACTIVATE_LOG:
-            self.SERVICE_LogFile.write_to_log(message)
+            self.SERVICE_LogFile.log(message)
         print(message)
 
     def send_message(self, image, occupation=False):
@@ -148,34 +151,41 @@ class OccupancyMonitor():
         cv2.imwrite(filename, image)
         return filename
 
+    def process(self, cap):
+        _, frame = cap.read()
+        _, frame2 = cap.read()
+        if self.USER_SETTING_FLIP_SCREEN:
+            frame, frame2 = cv2.rotate(frame, cv2.ROTATE_180), cv2.rotate(frame2, cv2.ROTATE_180)
+        return self.process_frames(frame, frame2)
+
     def process_frames(self, frame, frame2):
-            # convert to grey
-            frame_gray = cv2.GaussianBlur(self.convert_image_to_grey(frame), self.CV_GaussianBlurKernel, 0,0,)
-            frame2_gray = cv2.GaussianBlur(self.convert_image_to_grey(frame2), self.CV_GaussianBlurKernel, 0,0,)
-            # calculate abs difference between frame
-            abs_difference_between_frames = cv2.absdiff(frame2_gray, frame_gray)
-            # apply treshold on abs difference
-            _,treshold_on_abs_diff = cv2.threshold(abs_difference_between_frames, 50, 255, cv2.THRESH_BINARY)
-            # dilate tresholded and dilated difference of the two frames
-            dilated_frame = cv2.dilate(treshold_on_abs_diff, self.CV_DilationKernel, iterations=5)
-            # get contours of dilated frame
-            contours, _ = cv2.findContours(dilated_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            frame,boxes = self.findBoxfromContours(frame, contours)
-            # cv2.drawContours(frame, contours, -1, (0,255,0), 2)
-            faces = self.detect_faces(frame)
-            if boxes is not None and faces is None:
-                all_contours = boxes
-            elif faces is not None and boxes is None:
-                all_contours = faces
-            elif faces is not None and boxes is not None:
-                all_contours = [faces, boxes]
-            else:
-                all_contours = []
-            # all_contours = boxes if boxes is not None else None
-            self.print_to_image(frame, f"{len(all_contours) if all_contours is not None else False} objects found.", self.TEXT_info_text)
-            if self.USER_SETTING_ACTIVATE_DEBUG:
-                self.print_message(f"faces: {len(faces) if faces is not None else False} {type(faces)})\t\tboxes: {len(boxes) if boxes is not None else False} ({type(boxes)})\t\tall_contours: {len(all_contours) if all_contours is not None else False} ({type(all_contours)})")
-            return frame, all_contours
+        # convert to grey
+        frame_gray = cv2.GaussianBlur(self.convert_image_to_grey(frame), self.CV_GaussianBlurKernel, 0,0,)
+        frame2_gray = cv2.GaussianBlur(self.convert_image_to_grey(frame2), self.CV_GaussianBlurKernel, 0,0,)
+        # calculate abs difference between frame
+        abs_difference_between_frames = cv2.absdiff(frame2_gray, frame_gray)
+        # apply treshold on abs difference
+        _,treshold_on_abs_diff = cv2.threshold(abs_difference_between_frames, 50, 255, cv2.THRESH_BINARY)
+        # dilate tresholded and dilated difference of the two frames
+        dilated_frame = cv2.dilate(treshold_on_abs_diff, self.CV_DilationKernel, iterations=5)
+        # get contours of dilated frame
+        contours, _ = cv2.findContours(dilated_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        frame,boxes = self.findBoxfromContours(frame, contours)
+        # cv2.drawContours(frame, contours, -1, (0,255,0), 2)
+        faces = self.detect_faces(frame)
+        if boxes is not None and faces is None:
+            all_contours = boxes
+        elif faces is not None and boxes is None:
+            all_contours = faces
+        elif faces is not None and boxes is not None:
+            all_contours = [faces, boxes]
+        else:
+            all_contours = []
+        # all_contours = boxes if boxes is not None else None
+        self.print_to_image(frame, f"{len(all_contours) if all_contours is not None else False} objects found.", self.TEXT_info_text)
+        if self.USER_SETTING_ACTIVATE_DEBUG:
+            self.print_message(f"faces: {len(faces) if faces is not None else False} {type(faces)})\t\tboxes: {len(boxes) if boxes is not None else False} ({type(boxes)})\t\tall_contours: {len(all_contours) if all_contours is not None else False} ({type(all_contours)})")
+        return frame, all_contours
 
     def detect_faces(self, image):
         face_cascade =  cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
@@ -191,8 +201,7 @@ class OccupancyMonitor():
         image = image/255.0
         return image
 
-    def run(self, show_video_source=False):
-        self.fps = []
+    def startup(self):
         scaling_factor = 2 if self.USER_SETTING_REDUCED_COMPUTATIONAL_COMPLEXITY == True else 1
 
         # webcam
@@ -200,10 +209,13 @@ class OccupancyMonitor():
         cap.set(3,(self.USER_SETTING_SCREEN_RESOLUTION["y"]//scaling_factor))
         cap.set(4,(self.USER_SETTING_SCREEN_RESOLUTION["x"]//scaling_factor))
         self.print_message(f"Starting occupancy observation...\nVideo resolution is {int(cap.get(3))} x {int(cap.get(4))} pixels.")
-        self.show_user_settings()
+        return cap
+
+    def run(self, show_video_source=False):
+        cap = self.startup()
 
         start_time = time.time()
-        _,test_frame = cap.read()
+        # _,test_frame = cap.read()
         try:
             while cap.isOpened():
                 for msg_id in range(len(self.FLAG_message_send)):
@@ -215,12 +227,8 @@ class OccupancyMonitor():
                 #     SETTING_FRAMES_TO_ARM = (1/end_time) // USER_SETTING_SECONDS_TO_ARM
                 #     print_message(f"Auto adjust setting frames to arm to: {SETTING_FRAMES_TO_ARM}")
 
-                _, frame = cap.read()
-                _, frame2 = cap.read()
-                if self.USER_SETTING_FLIP_SCREEN:
-                    frame, frame2 = cv2.rotate(frame, cv2.ROTATE_180), cv2.rotate(frame2, cv2.ROTATE_180)
                 # process frames
-                frame, contours = self.process_frames(frame, frame2)
+                frame, contours = self.process(cap)
 
                 # init and then check room status update...
                 if len(contours) > 0:
@@ -250,14 +258,6 @@ class OccupancyMonitor():
                 if self.USER_SETTING_ACTIVATE_DEBUG:
                     self.print_message(f"l_c: {len(contours)}\tr_o: {self.FLAG_room_occupied}\tu_r_s: {self.FLAG_room_status}\tm_s0: {self.FLAG_message_send[0]}\tm_s1: {self.FLAG_message_send[1]}\tS_F_T_A: {self.SETTING_FRAMES_TO_ARM}")
                 
-                end_time = time.time() - start_time
-                self.fps.append(1/end_time)
-
-                # print("loop took {:.2f} seconds. ({:.1f} fps)".format(end_time, (1/end_time)))
-                start_time = time.time()
-                self.print_to_image(frame, f"fps: {1/end_time:.2f} ({np.mean(self.fps):.2f})", self.TEXT_fps_text)
-
-                
                 # ... and occupation
                 if self.FLAG_room_occupied == None:
                     self.FLAG_room_occupied = False
@@ -273,6 +273,11 @@ class OccupancyMonitor():
                         if self.USER_SETTING_ACTIVATE_LOG:
                             self.SERVICE_LogFile.log_event(occupation=False)
                     self.print_to_image(frame, "Room not occupied!", self.TEXT_not_occupied_text)
+                
+                end_time = time.time() - start_time
+                self.fps.update(1/end_time)
+                start_time = time.time()
+                self.print_to_image(frame, f"fps: {1/end_time:.2f} ({self.fps.get_mean():.2f})", self.TEXT_fps_text)
 
                 # show results
                 if show_video_source:
@@ -284,15 +289,20 @@ class OccupancyMonitor():
         except (KeyboardInterrupt):
                 pass
         finally:
-            if show_video_source:
-                cv2.destroyAllWindows()
-                cap.release()
-                self.print_message("All windows have been destroyed and the webcam connection has been terminated.")
-            # end all services
-            self.print_message(f"FPS Statistics:\t\tmin: {np.min(self.fps):.4f}\tmean: {np.mean(self.fps):.4f}\tmedian: {np.median(self.fps):.4f}\tmax: {np.max(self.fps):.4f}")
-            if self.USER_SETTING_ACTIVATE_LOG:
-                self.SERVICE_LogFile.__exit__()
-            if self.USER_SETTING_ACTIVATE_EMAIL_NOTIFICATIONS:
-                self.SERVICE_Email.__exit__()
+            self.shutdown(cap, show_video_source)
+
+    def shutdown(self, cap, show_video_source):
+        if show_video_source:
+            cv2.destroyAllWindows()
+            cap.release()
+            self.print_message("All windows have been destroyed and the webcam connection has been terminated.")
+        
+        # end all services
+        self.print_message(self.fps.get_statistics_string())
+
+        if self.USER_SETTING_ACTIVATE_LOG:
+            self.SERVICE_LogFile.__exit__()
+        if self.USER_SETTING_ACTIVATE_EMAIL_NOTIFICATIONS:
+            self.SERVICE_Email.__exit__()
 
     # end of method
