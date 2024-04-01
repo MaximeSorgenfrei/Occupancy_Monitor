@@ -3,8 +3,10 @@ import numpy as np
 class FPS:
     def __init__(self):
         self.fps = []
+        self.current = np.inf
 
     def update(self, value):
+        self.current = value
         self.fps.append(value)
 
     def get_min(self):
@@ -18,6 +20,9 @@ class FPS:
     
     def get_median(self):
         return np.median(self.fps)
+    
+    def get_current(self):
+        return self.current
     
     def get_statistics_string(self) -> str:
         return f"FPS Statistics:\t\tmin: {self.get_min():.4f}\tmean: {self.get_mean():.4f}\tmedian: {(self.get_median()):.4f}\tmax: {(self.get_max()):.4f}"
