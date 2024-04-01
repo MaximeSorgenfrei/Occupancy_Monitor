@@ -35,7 +35,7 @@ class OccupancyMonitor():
         self.__version__ = 1.0
 
         # load user settings
-        self.load_user_config()
+        self._load_user_config()
         if self.USER_SETTING_ACTIVATE_LOG:
             self.SERVICE_LogFile = Log(self.SETTING_LOG_FOLDER)
             self._print_message(f"[{time.strftime(self.SETTING_TIME_FMT)}]\tLogging enabled.")
@@ -56,10 +56,10 @@ class OccupancyMonitor():
         self.fps = FPS()
         self.image_processing = ImageProcessing()
 
-        if show_user_settings: self.show_user_settings()
-        if diagnostics: self.run_diagnostics()
+        if show_user_settings: self._show_user_settings()
+        if diagnostics: self._run_diagnostics()
 
-    def load_user_config(self):
+    def _load_user_config(self):
         with open(self.SETTING_USER_CONFIG_FILE, 'r') as f:
             config = json.load(f)
         f.close()
@@ -81,12 +81,12 @@ class OccupancyMonitor():
         
         del config
 
-    def show_user_settings(self):
+    def _show_user_settings(self):
         self._print_message("Following user specified settings are used:\n")
         for item in dir(self):
             if item.startswith("USER_SETTING"): self._print_message(f"{item}:\t\t{self.__getattribute__(item)}")
 
-    def run_diagnostics(self):
+    def _run_diagnostics(self):
         self._print_message("Running diagnostics:\n-----")
         self._print_message(f"Correct cv2 version installed?\t\t{cv2.__version__=='4.1.0'}")
         self._print_message(f"Correct numpy version installed?\t{np.__version__=='1.16.3'}")
@@ -97,8 +97,8 @@ class OccupancyMonitor():
             self.SERVICE_LogFile.log(message)
         print(message)
 
-    def send_message(self, image, occupation=False):
-        filepath = self.save_image_to_archive(image, occupation)
+    def _send_message(self, image, occupation=False):
+        filepath = self._save_image_to_archive(image, occupation)
         if self.USER_SETTING_ACTIVATE_EMAIL_NOTIFICATIONS:
             self.SERVICE_Email.send_email("Room is occupied", filename=filepath)
             timestr = time.strftime('%Y-%m-%d %H:%M:%S\t(%Z %z)')
@@ -115,30 +115,30 @@ class OccupancyMonitor():
                 print(e)
         return ([False,True] if occupation==True else [True,False])
 
-    def print_to_image(self, image,text,font_type):
+    def _print_to_image(self, image,text,font_type):
         assert len(image.shape) == 3, "Image must be three dimensional"
         assert text is not None, "Text must be provided"
         cv2.putText(image,text, font_type.org, font_type.fontFace, font_type.fontScale, font_type.color, font_type.thickness, font_type.lineType)
 
-    def save_image_to_archive(self, image, occupation):
+    def _save_image_to_archive(self, image, occupation):
         occ_bool = "occ" if occupation else "nonocc"
         filename = os.path.join(f"{self.SETTING_ARCHIVE_FOLDER}/img_{time.strftime('%Y-%m-%d_%H-%M-%S')}_{occ_bool}.jpg")
         cv2.imwrite(filename, image)
         return filename
 
-    def process(self, cap):
+    def _process(self, cap):
         _, frame = cap.read()
         _, frame2 = cap.read()
         if self.USER_SETTING_FLIP_SCREEN:
             frame, frame2 = cv2.rotate(frame, cv2.ROTATE_180), cv2.rotate(frame2, cv2.ROTATE_180)
 
         frame, detected_objects = self.image_processing.process(frame, frame2)
-        self.print_to_image(frame, f"{len(detected_objects) if detected_objects is not None else False} objects found.", self.TEXT_info_text)
+        self._print_to_image(frame, f"{len(detected_objects) if detected_objects is not None else False} objects found.", self.TEXT_info_text)
         # if self.USER_SETTING_ACTIVATE_DEBUG:
         #     self._print_message(f"faces: {len(faces) if faces is not None else False} {type(faces)})\t\tboxes: {len(boxes) if boxes is not None else False} ({type(boxes)})\t\detected_tobjects: {len(detected_objects) if detected_objects is not None else False} ({type(detected_objects)})")
         return frame, detected_objects
 
-    def startup(self):
+    def _startup(self):
         scaling_factor = 2 if self.USER_SETTING_REDUCED_COMPUTATIONAL_COMPLEXITY == True else 1
 
         for msg_id in range(len(self.FLAG_message_send)):
@@ -157,14 +157,14 @@ class OccupancyMonitor():
         self._print_message(f"Starting occupancy observation...\nVideo resolution is {int(cap.get(3))} x {int(cap.get(4))} pixels.")
         return cap
 
-    def calculate_status(self, frame, contours):
+    def _calculate_status(self, frame, contours):
         if len(contours) > 0:
             if self.FLAG_room_status == None:
                 self.FLAG_room_status = 0
             else:
                 self.FLAG_room_status += 1
                 text = "." * self.FLAG_room_status if self.FLAG_room_status > 0 else "."
-                self.print_to_image(frame, f"Checking{text}", self.TEXT_status_text)
+                self._print_to_image(frame, f"Checking{text}", self.TEXT_status_text)
         elif len(contours) == 0:
             if self.FLAG_room_status == None:
                 self.FLAG_room_status = 0
@@ -190,19 +190,19 @@ class OccupancyMonitor():
             self.FLAG_room_occupied = False
         elif self.FLAG_room_occupied == True:
             if self.FLAG_message_send[1] == False:
-                self.FLAG_message_send = self.send_message(frame, occupation=True)
+                self.FLAG_message_send = self._send_message(frame, occupation=True)
                 if self.USER_SETTING_ACTIVATE_LOG:
                     self.SERVICE_LogFile.log_event(occupation=True)
-            self.print_to_image(frame, "Room occupied!", self.TEXT_occupied_text)
+            self._print_to_image(frame, "Room occupied!", self.TEXT_occupied_text)
         else:
             if self.FLAG_message_send[0] == False:
-                self.FLAG_message_send = self.send_message(frame, occupation=False)
+                self.FLAG_message_send = self._send_message(frame, occupation=False)
                 if self.USER_SETTING_ACTIVATE_LOG:
                     self.SERVICE_LogFile.log_event(occupation=False)
-            self.print_to_image(frame, "Room not occupied!", self.TEXT_not_occupied_text)
+            self._print_to_image(frame, "Room not occupied!", self.TEXT_not_occupied_text)
 
     def run(self, show_video_source=False):
-        cap = self.startup()
+        cap = self._startup()
 
         # _,test_frame = cap.read()
         try:
@@ -210,12 +210,12 @@ class OccupancyMonitor():
                 start_time = time.time()
 
                 # process frames
-                frame, detected_objects = self.process(cap)
+                frame, detected_objects = self._process(cap)
 
                 # init and then check room status update...
-                self.calculate_status(frame, detected_objects)
+                self._calculate_status(frame, detected_objects)
                 
-                self.update_fps(frame, start_time)
+                self._update_fps(frame, start_time)
 
                 # show results
                 if show_video_source:
@@ -229,7 +229,7 @@ class OccupancyMonitor():
         finally:
             self._shutdown(cap, show_video_source)
 
-    def update_fps(self, frame, start_time):
+    def _update_fps(self, frame, start_time):
         self._calculate_fps(start_time)
         self._print_fps_to_frame(frame)
 
@@ -238,7 +238,7 @@ class OccupancyMonitor():
         self.fps.update(curent_fps)
 
     def _print_fps_to_frame(self, frame):
-        self.print_to_image(frame, f"fps: {self.fps.get_current():.2f} ({self.fps.get_mean():.2f})", self.TEXT_fps_text)
+        self._print_to_image(frame, f"fps: {self.fps.get_current():.2f} ({self.fps.get_mean():.2f})", self.TEXT_fps_text)
 
     def _shutdown(self, cap, show_video_source):
         if show_video_source:
