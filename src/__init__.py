@@ -204,6 +204,15 @@ class OccupancyMonitor():
     def startup(self):
         scaling_factor = 2 if self.USER_SETTING_REDUCED_COMPUTATIONAL_COMPLEXITY == True else 1
 
+        for msg_id in range(len(self.FLAG_message_send)):
+            if self.FLAG_message_send[msg_id] == None: self.FLAG_message_send[msg_id] = False
+        if self.SETTING_FRAMES_TO_ARM == None:
+            self.SETTING_FRAMES_TO_ARM = 10
+        # elif SETTING_FRAMES_TO_ARM < 0:
+        #     # frames = fps / s 
+        #     SETTING_FRAMES_TO_ARM = (1/end_time) // USER_SETTING_SECONDS_TO_ARM
+        #     print_message(f"Auto adjust setting frames to arm to: {SETTING_FRAMES_TO_ARM}")
+
         # webcam
         cap = cv2.VideoCapture(0)
         cap.set(3,(self.USER_SETTING_SCREEN_RESOLUTION["y"]//scaling_factor))
@@ -211,73 +220,65 @@ class OccupancyMonitor():
         self.print_message(f"Starting occupancy observation...\nVideo resolution is {int(cap.get(3))} x {int(cap.get(4))} pixels.")
         return cap
 
+    def process_contours(self, frame, contours):
+        if len(contours) > 0:
+            if self.FLAG_room_status == None:
+                self.FLAG_room_status = 0
+            else:
+                self.FLAG_room_status += 1
+                text = "." * self.FLAG_room_status if self.FLAG_room_status > 0 else "."
+                self.print_to_image(frame, f"Checking{text}", self.TEXT_status_text)
+        elif len(contours) == 0:
+            if self.FLAG_room_status == None:
+                self.FLAG_room_status = 0
+            else:
+                self.FLAG_room_status -= 1
+        else:
+            raise ValueError(f"updating room status is {self.FLAG_room_status}")
+
+        if self.FLAG_room_status > self.USER_SETTING_SECONDS_TO_ARM:
+            self.FLAG_room_occupied = True
+            self.FLAG_room_status = None
+        elif self.FLAG_room_status < -self.SETTING_FRAMES_TO_ARM:
+            self.FLAG_room_occupied = False
+            self.FLAG_room_status = None
+        else:
+            pass #raise ValueError(f"{len(contours)} is smaller than zero.")
+
+        if self.USER_SETTING_ACTIVATE_DEBUG:
+            self.print_message(f"l_c: {len(contours)}\tr_o: {self.FLAG_room_occupied}\tu_r_s: {self.FLAG_room_status}\tm_s0: {self.FLAG_message_send[0]}\tm_s1: {self.FLAG_message_send[1]}\tS_F_T_A: {self.SETTING_FRAMES_TO_ARM}")
+        
+        # ... and occupation
+        if self.FLAG_room_occupied == None:
+            self.FLAG_room_occupied = False
+        elif self.FLAG_room_occupied == True:
+            if self.FLAG_message_send[1] == False:
+                self.FLAG_message_send = self.send_message(frame, occupation=True)
+                if self.USER_SETTING_ACTIVATE_LOG:
+                    self.SERVICE_LogFile.log_event(occupation=True)
+            self.print_to_image(frame, "Room occupied!", self.TEXT_occupied_text)
+        else:
+            if self.FLAG_message_send[0] == False:
+                self.FLAG_message_send = self.send_message(frame, occupation=False)
+                if self.USER_SETTING_ACTIVATE_LOG:
+                    self.SERVICE_LogFile.log_event(occupation=False)
+            self.print_to_image(frame, "Room not occupied!", self.TEXT_not_occupied_text)
+
     def run(self, show_video_source=False):
         cap = self.startup()
 
-        start_time = time.time()
         # _,test_frame = cap.read()
         try:
             while cap.isOpened():
-                for msg_id in range(len(self.FLAG_message_send)):
-                    if self.FLAG_message_send[msg_id] == None: self.FLAG_message_send[msg_id] = False
-                if self.SETTING_FRAMES_TO_ARM == None:
-                    self.SETTING_FRAMES_TO_ARM = 10
-                # elif SETTING_FRAMES_TO_ARM < 0:
-                #     # frames = fps / s 
-                #     SETTING_FRAMES_TO_ARM = (1/end_time) // USER_SETTING_SECONDS_TO_ARM
-                #     print_message(f"Auto adjust setting frames to arm to: {SETTING_FRAMES_TO_ARM}")
+                start_time = time.time()
 
                 # process frames
                 frame, contours = self.process(cap)
 
                 # init and then check room status update...
-                if len(contours) > 0:
-                    if self.FLAG_room_status == None:
-                        self.FLAG_room_status = 0
-                    else:
-                        self.FLAG_room_status += 1
-                        text = "." * self.FLAG_room_status if self.FLAG_room_status > 0 else "."
-                        self.print_to_image(frame, f"Checking{text}", self.TEXT_status_text)
-                elif len(contours) == 0:
-                    if self.FLAG_room_status == None:
-                        self.FLAG_room_status = 0
-                    else:
-                        self.FLAG_room_status -= 1
-                else:
-                    raise ValueError(f"updating room status is {self.FLAG_room_status}")
-
-                if self.FLAG_room_status > self.USER_SETTING_SECONDS_TO_ARM:
-                    self.FLAG_room_occupied = True
-                    self.FLAG_room_status = None
-                elif self.FLAG_room_status < -self.SETTING_FRAMES_TO_ARM:
-                    self.FLAG_room_occupied = False
-                    self.FLAG_room_status = None
-                else:
-                    pass #raise ValueError(f"{len(contours)} is smaller than zero.")
-
-                if self.USER_SETTING_ACTIVATE_DEBUG:
-                    self.print_message(f"l_c: {len(contours)}\tr_o: {self.FLAG_room_occupied}\tu_r_s: {self.FLAG_room_status}\tm_s0: {self.FLAG_message_send[0]}\tm_s1: {self.FLAG_message_send[1]}\tS_F_T_A: {self.SETTING_FRAMES_TO_ARM}")
+                self.process_contours(frame, contours)
                 
-                # ... and occupation
-                if self.FLAG_room_occupied == None:
-                    self.FLAG_room_occupied = False
-                elif self.FLAG_room_occupied == True:
-                    if self.FLAG_message_send[1] == False:
-                        self.FLAG_message_send = self.send_message(frame, occupation=True)
-                        if self.USER_SETTING_ACTIVATE_LOG:
-                            self.SERVICE_LogFile.log_event(occupation=True)
-                    self.print_to_image(frame, "Room occupied!", self.TEXT_occupied_text)
-                else:
-                    if self.FLAG_message_send[0] == False:
-                        self.FLAG_message_send = self.send_message(frame, occupation=False)
-                        if self.USER_SETTING_ACTIVATE_LOG:
-                            self.SERVICE_LogFile.log_event(occupation=False)
-                    self.print_to_image(frame, "Room not occupied!", self.TEXT_not_occupied_text)
-                
-                end_time = time.time() - start_time
-                self.fps.update(1/end_time)
-                start_time = time.time()
-                self.print_to_image(frame, f"fps: {1/end_time:.2f} ({self.fps.get_mean():.2f})", self.TEXT_fps_text)
+                self.calculate_fps(frame, start_time)
 
                 # show results
                 if show_video_source:
@@ -290,6 +291,12 @@ class OccupancyMonitor():
                 pass
         finally:
             self.shutdown(cap, show_video_source)
+
+    def calculate_fps(self, frame, start_time):
+        end_time = time.time() - start_time
+        self.fps.update(1/end_time)
+        start_time = time.time()
+        self.print_to_image(frame, f"fps: {1/end_time:.2f} ({self.fps.get_mean():.2f})", self.TEXT_fps_text)
 
     def shutdown(self, cap, show_video_source):
         if show_video_source:

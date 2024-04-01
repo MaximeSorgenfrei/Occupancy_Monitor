@@ -1,4 +1,11 @@
 {
+    "SETTING_SECONDS_TO_ARM": 10,
+    "SETTING_SCREEN_RESOLUTION": {
+        "x" : 1920,
+        "y" : 1080
+    },
+    "SETTING_FLIP_SCREEN" : false,
+    "SETTING_REDUCED_COMPUTATIONAL_COMPLEXITY" : true,
     "SETTING_fromaddr": "from@example.com",
     "SETTING_EMAIL_PASSWORD" : "password",
     "SETTING_SERVER": "smtp.example.com",
@@ -7,15 +14,8 @@
         "to_one@example.com",
         "to_two@example.com"
     ],
-    "SETTING_SECONDS_TO_ARM": 10,
-    "SETTING_ACTIVATE_EMAIL_NOTIFICATIONS": false,
     "SETTING_SAVE_IMAGES": true,
-    "SETTING_DEBUG": false,
+    "SETTING_DEBUG": true,
     "SETTING_LOG": true,
-    "SETTING_SCREEN_RESOLUTION": {
-        "x" : 1920,
-        "y" : 1080
-    },
-    "SETTING_FLIP_SCREEN" : false,
-    "SETTING_REDUCED_COMPUTATIONAL_COMPLEXITY" : true
+    "SETTING_ACTIVATE_EMAIL_NOTIFICATIONS": false
 }
