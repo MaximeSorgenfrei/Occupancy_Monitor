@@ -34,7 +34,6 @@ class ImageProcessing():
     
     def _findBoxesfromContours(self, image, contours = []):
         boxes = []
-        print("{} objects found!".format(len(contours)))
         for contour in contours:
             box = self._findBoxFromContour(contour)
             boxes.append(box)
