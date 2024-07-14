@@ -10,6 +10,7 @@ from src.texttype import TextType
 from src.log import Log
 from src.fps import FPS
 from src.imageProcessing import ImageProcessing
+from src.stateMachine import Monitor
 
 class OccupancyMonitor():
 
@@ -55,6 +56,7 @@ class OccupancyMonitor():
 
         self.fps = FPS()
         self.image_processing = ImageProcessing()
+        self.monitor = Monitor(10) #self.SETTING_FRAMES_TO_ARM)
 
         if show_user_settings: self._show_user_settings()
         if diagnostics: self._run_diagnostics()
@@ -158,6 +160,10 @@ class OccupancyMonitor():
         return cap
 
     def _calculate_status(self, frame, contours):
+
+        shadow_state = self.monitor.update(len(contours)>0)
+        self._print_message(f"Shadow state: {shadow_state}")
+
         if len(contours) > 0:
             if self.FLAG_room_status == None:
                 self.FLAG_room_status = 0
