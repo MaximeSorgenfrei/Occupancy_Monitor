@@ -30,7 +30,7 @@ class EMailService():
         tdelta = datetime.strptime(timestring, self.time_FMT) - datetime.strptime(self.start_time, self.time_FMT)
         self.send_email(f"The room occupancy observation service has been shut down!\n\n{timestring}\n\nService has been up for {tdelta} (hours:minutes:seconds)", "Shutdown")
 
-    def create_message(self, address, msg_body, subject, filename): 
+    def _create_message(self, address, msg_body, subject, filename): 
         message = MIMEMultipart()
         message['From'] = self.fromaddr
         message['To'] = address
@@ -38,10 +38,10 @@ class EMailService():
         body = f"{msg_body}\n\n------\nThis message has been automatically sent from {self.fromaddr} to {address} at {time.strftime(self.time_FMT)}\n------"
         message.attach(MIMEText(body, 'plain'))
 
-        message = self.attach_file_to_message(message, filename)
+        message = self._attach_file_to_message(message, filename)
         return message
 
-    def attach_file_to_message(self, message : MIMEMultipart, filename=None):
+    def _attach_file_to_message(self, message : MIMEMultipart, filename=None):
         if filename is not None:
             attachment = open(filename, "rb") 
             image = MIMEImage(attachment.read())
@@ -51,25 +51,25 @@ class EMailService():
         
         return message
 
-    def establish_connection(self):
+    def _establish_connection(self):
         # creates SMTP session 
         self.smtp_connection = smtplib.SMTP(self.server, self.server_port) 
         self.smtp_connection.starttls()
         self.smtp_connection.login(self.fromaddr, self.password)
 
-    def quit_connection(self):
+    def _quit_connection(self):
         self.smtp_connection.quit()
 
-    def send_email_to_addr(self, address, message, subject, filename):
-        message = self.create_message(address, message, subject, filename)
+    def _send_email_to_addr(self, address, message, subject, filename):
+        message = self._create_message(address, message, subject, filename)
         res = self.smtp_connection.sendmail(self.fromaddr, address, message.as_string())
         print(f"result from sendmail: {res, type(res)}")
 
     def send_email(self, message, subject="Occupancy change", filename=None):        
-        self.establish_connection()
+        self._establish_connection()
         
         for address in self.toaddr:
-            self.send_email_to_addr(address, message, subject, filename)
+            self._send_email_to_addr(address, message, subject, filename)
             
-        self.quit_connection()
+        self._quit_connection()
         return True
